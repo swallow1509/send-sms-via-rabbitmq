@@ -2,22 +2,34 @@ package main
 
 import (
 	"log"
+	"os"
+	"strings"
 
 	"github.com/streadway/amqp"
 )
 
 var (
-	amqpURI  = "amqp://guest:guest@localhost:5672/"
-	conn     *amqp.Connection
-	channel  *amqp.Channel
-	newQueue amqp.Queue
-	err      error
+	amqpURI   = "amqp://guest:guest@localhost:5672/"
+	conn      *amqp.Connection
+	channel   *amqp.Channel
+	taskQueue amqp.Queue
+	err       error
 )
 
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
 	}
+}
+
+func fromBody(str []string) string {
+	var s string
+	if (len(str) < 2) || os.Args[1] == "" {
+		s = "Hello"
+	} else {
+		s = strings.Join(str[1:], " ")
+	}
+	return s
 }
 
 func main() {
@@ -29,9 +41,9 @@ func main() {
 	failOnError(err, "Failed to create channel")
 	defer channel.Close()
 
-	newQueue, err = channel.QueueDeclare(
-		"newQueue",
-		false,
+	taskQueue, err = channel.QueueDeclare(
+		"task", //name
+		true,   //durable
 		false,
 		false,
 		false,
@@ -39,15 +51,16 @@ func main() {
 	)
 	failOnError(err, "Failed to declare a queue")
 
-	body := "Hello, AMQP!"
+	body := fromBody(os.Args)
 	err = channel.Publish(
-		"",
-		newQueue.Name,
-		false,
+		"",             //exchange
+		taskQueue.Name, //routing key
+		false,          //mandatory
 		false,
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(body),
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "text/plain",
+			Body:         []byte(body),
 		},
 	)
 	failOnError(err, "Failed to publish message")
