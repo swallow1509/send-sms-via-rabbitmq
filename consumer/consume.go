@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"log"
 	"time"
 
@@ -14,6 +13,7 @@ var (
 	channel   *amqp.Channel
 	taskQueue amqp.Queue
 	err       error
+	t         time.Time
 )
 
 func failOnError(err error, msg string) {
@@ -41,6 +41,8 @@ func main() {
 	)
 	failOnError(err, "Failed to declare a queue")
 
+	//This code responsible for the count of messages
+	//waiting for Acknowledgements(Acks)
 	err = channel.Qos(
 		1, //fetch count
 		0, //preFetch size
@@ -48,6 +50,7 @@ func main() {
 	)
 	failOnError(err, "Failed to set Qos!")
 
+	//Message consume properties
 	messages, err := channel.Consume(
 		taskQueue.Name, //queue
 		"",             // consumer
@@ -62,16 +65,20 @@ func main() {
 	forever := make(chan bool)
 
 	go func() {
+
 		for d := range messages {
 			log.Printf(" [x] Received a message: %s", d.Body)
-			dotCount := bytes.Count(d.Body, []byte("."))
-			t := time.Duration(dotCount)
+
+			//Promitive RateLimiter: allows 1 message every 2 seconds
+			// and when Acknowledged prints "Done"
+			t := time.Duration(2)
 			time.Sleep(t * time.Second)
 			log.Printf("Done")
 			d.Ack(false)
 		}
 	}()
 
+	//Waiting for message infinitely...
 	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	<-forever
+	<-forever //Waiting for other function to finish
 }
