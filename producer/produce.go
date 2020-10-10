@@ -16,12 +16,14 @@ var (
 	err       error
 )
 
+//Operation usually fails if RabbitMQ server is not started
 func failOnError(err error, msg string) {
 	if err != nil {
 		log.Fatalf("%s: %s", msg, err)
 	}
 }
 
+//Function for getting string from Terminal
 func fromBody(str []string) string {
 	var s string
 	if (len(str) < 2) || os.Args[1] == "" {
@@ -33,14 +35,18 @@ func fromBody(str []string) string {
 }
 
 func main() {
+	//Creating connection
 	conn, err = amqp.Dial(amqpURI)
 	failOnError(err, "Failed to connect to RabbitMQ!")
 	defer conn.Close()
 
+	//Opening channel on top of connection. Connections are expensive.
+	//Channels are cheap. Multiple channels can be created on one channel.
 	channel, err = conn.Channel()
 	failOnError(err, "Failed to create channel")
 	defer channel.Close()
 
+	//Declaring a "taskQueue" with "task" name property
 	taskQueue, err = channel.QueueDeclare(
 		"task", //name
 		true,   //durable
@@ -51,7 +57,10 @@ func main() {
 	)
 	failOnError(err, "Failed to declare a queue")
 
+	//Getting messages from Terminal and  print n times
 	body := fromBody(os.Args)
+
+	//Publish properties
 	err = channel.Publish(
 		"",             //exchange
 		taskQueue.Name, //routing key
